@@ -1,0 +1,320 @@
+
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>固定圖片輪換拼圖</title>
+	<link rel="stylesheet" type="text/css" href="style.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #ffffff;
+            padding: 20px;
+        }
+        
+        h1 {
+            color: #ffffff;
+            margin-bottom: 10px;
+        }
+        
+        .description {
+            margin-bottom: 20px;
+            text-align: center;
+            max-width: 600px;
+            color: #ffffff;
+        }
+        
+        .puzzle-container {
+            display: grid;
+            grid-template-columns: repeat(3, 180px);
+            grid-template-rows: repeat(2, 180px);
+            gap: 0px;
+            margin: 20px 0;
+        }
+        
+        .puzzle-piece {
+            width: 180px;
+            height: 180px;
+            background-color: #fff;
+            border: 2px solid #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            cursor: default;
+            user-select: none;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .puzzle-piece.fixed {
+            background-color: #ffffff;
+        }
+        
+        .puzzle-piece.movable {
+            background-color: #ffffff;
+            cursor: pointer;
+        }
+        
+        .puzzle-piece.movable:hover {
+            background-color: #ffffff;
+        }
+        
+        .piece-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        
+        .piece-number {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 50%;
+            font-size: 14px;
+        }
+        
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            max-width: 600px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #ffffff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            min-width: 120px;
+        }
+        
+        button:hover {
+            background-color: #ffffff;
+        }
+        
+        .message {
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            height: 24px;
+            text-align: center;
+            color: #ffffff;
+        }
+        
+        .success {
+            color: #ffffff;
+        }
+        
+        .error {
+            color: #ffffff;
+        }
+        
+        .image-info {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #ffffff;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>光窟礦工勞動地圖</h1>
+    <div class="description">
+        除3、4號位置以外皆是可變動的地圖，點擊可切換預設的圖片檔案
+    </div>
+    
+    <div class="puzzle-container" id="puzzleContainer">
+        <!-- 拼圖塊將在這裡動態生成 -->
+    </div>
+    
+    
+    <div class="message" id="message"></div>
+    <div class="image-info" id="imageInfo"></div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const puzzleContainer = document.getElementById('puzzleContainer');
+            const shuffleBtn = document.getElementById('shuffleBtn');
+            const checkBtn = document.getElementById('checkBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const messageEl = document.getElementById('message');
+            const imageInfoEl = document.getElementById('imageInfo');
+            
+            // 預設的圖片檔案 (替換為您實際的圖片URL)
+            const imageFiles = {
+                1: [
+                    '3.png',
+                    '4.png'
+                ],
+                2: [
+                    '6.png',
+                    '7.png'
+                ],
+                3: '2.png',
+                4: '1.png',
+                5: [
+                    '9.png',
+                    '10.png',
+                    '11.png'
+                ],
+                6: [
+                    '12.png',
+                    '13.png',
+                    '14.png'
+                ]
+            };            
+            let puzzlePieces = [];
+            let movablePieces = [];
+            let correctOrder = [];
+            
+            // 初始化遊戲
+            initGame();
+            
+            // 打亂拼圖按鈕
+            shuffleBtn.addEventListener('click', shufflePuzzle);
+            
+            // 檢查答案按鈕
+            checkBtn.addEventListener('click', checkCompletion);
+            
+            // 重置遊戲按鈕
+            resetBtn.addEventListener('click', initGame);
+            
+            // 初始化遊戲
+            function initGame() {
+                // 清空拼圖容器
+                puzzleContainer.innerHTML = '';
+                puzzlePieces = [];
+                movablePieces = [];
+                correctOrder = [];
+                
+                // 顯示圖片資訊
+                showImageInfo();
+                
+                // 創建拼圖塊
+                for (let i = 1; i <= 6; i++) {
+                    const piece = document.createElement('div');
+                    piece.className = 'puzzle-piece';
+                    piece.dataset.id = i;
+                    piece.dataset.imageIndex = 0; // 當前圖片索引
+                    
+                    // 設置固定或可移動
+                    if (i === 3 || i === 4) {
+                        piece.classList.add('fixed');
+                        setPieceImage(piece, i, 0);
+                        
+                        const number = document.createElement('div');
+                        number.className = 'piece-number';
+                        number.textContent = i;
+                        piece.appendChild(number);
+                    } else {
+                        piece.classList.add('movable');
+                        correctOrder.push(i);
+                        
+                        // 隨機選擇一個圖片
+                        const randomIndex = Math.floor(Math.random() * imageFiles[i].length);
+                        piece.dataset.imageIndex = randomIndex;
+                        setPieceImage(piece, i, randomIndex);
+                        
+                        const number = document.createElement('div');
+                        number.className = 'piece-number';
+                        number.textContent = i;
+                        piece.appendChild(number);
+                        
+                        // 點擊事件 - 切換圖片
+                        piece.addEventListener('click', function() {
+                            const pieceId = parseInt(this.dataset.id);
+                            let currentIndex = parseInt(this.dataset.imageIndex);
+                            currentIndex = (currentIndex + 1) % imageFiles[pieceId].length;
+                            
+                            this.dataset.imageIndex = currentIndex;
+                            setPieceImage(this, pieceId, currentIndex);
+                        });
+                        
+                        movablePieces.push(piece);
+                    }
+                    
+                    puzzleContainer.appendChild(piece);
+                    puzzlePieces.push(piece);
+                }
+                
+                messageEl.textContent = '你是否曾被屏障擋到心煩意躁?免驚 按一按就可暢通無阻(圖片由紳士Ltw ltw99999堤供)';
+                messageEl.className = 'message';
+            }
+            
+            // 設置拼圖塊圖片
+            function setPieceImage(piece, id, index) {
+                // 清除現有圖片
+                const oldImg = piece.querySelector('img');
+                if (oldImg) piece.removeChild(oldImg);
+                
+                const img = document.createElement('img');
+                img.className = 'piece-image';
+                
+                if (id === 3 || id === 4) {
+                    img.src = imageFiles[id];
+                } else {
+                    img.src = imageFiles[id][index];
+                }
+                
+                piece.appendChild(img);
+            }
+            
+            // 顯示圖片資訊
+            function showImageInfo() {
+                let info = '可用圖片: 5號位(3張)  6號位(3張) ';
+                for (let i = 1; i <= 2; i++) {
+                    info += `${i}號位(${imageFiles[i].length}張) `;
+                }
+                imageInfoEl.textContent = info;
+            }
+            
+            // 打亂拼圖
+            function shufflePuzzle() {
+                movablePieces.forEach(piece => {
+                    const pieceId = parseInt(piece.dataset.id);
+                    const randomIndex = Math.floor(Math.random() * imageFiles[pieceId].length);
+                    
+                    piece.dataset.imageIndex = randomIndex;
+                    setPieceImage(piece, pieceId, randomIndex);
+                });
+                
+                messageEl.textContent = '拼圖已打亂，請嘗試恢復正確順序';
+                messageEl.className = 'message';
+            }
+            
+            // 檢查拼圖是否完成
+            function checkCompletion() {
+                let isCorrect = true;
+                
+                // 檢查所有可移動拼圖塊是否顯示第一張圖片
+                movablePieces.forEach(piece => {
+                    if (parseInt(piece.dataset.imageIndex) !== 0) {
+                        isCorrect = false;
+                    }
+                });
+                
+                if (isCorrect) {
+                    messageEl.textContent = '恭喜！所有拼圖塊都顯示正確的第一張圖片！';
+                    messageEl.className = 'message success';
+                } else {
+                    messageEl.textContent = '拼圖尚未完成，請繼續嘗試';
+                    messageEl.className = 'message error';
+                }
+            }
+        });
+    </script>
+</body>
+</html>
